@@ -12,7 +12,8 @@ class KontrolF1(ControlSurface):
         with self.component_guard():
             self.__c_instance = c_instance
             self.log_message("Init")
-            self.vumeter = VUMeterF1(self, [0, 1, 2, 3], 0)
+            self.vumeters = [ VUMeterF1(self, [0 + index * 4, 1 + index * 4, 2 + index * 4, 3 + index * 4], index) for index in range(4) ]
 
     def update_display(self):
-        self.vumeter.update()
+        for index in range(4):
+            self.vumeters[index].update()

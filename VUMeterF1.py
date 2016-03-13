@@ -1,47 +1,63 @@
 #VUMeters.py
 import LiveUtils
 from _Framework.SliderElement import SliderElement
-from _Framework.InputControlElement import * # Base class for all classes representing control elements on a controller
+from _Framework.InputControlElement import *
+import ColorMap
 
-CHANNEL_SCALE_MAX = 0.92
-CHANNEL_SCALE_MIN = 0.52
-MIDI_MAX_VALUE = 128
+CHANNEL_SCALE_MAX = 1
+CHANNEL_SCALE_MIN = 0.2
 
-class VUMeterF1():
+class VUMeterF1:
     'represents a single VU to store RMS values etc in'
     def __init__(self, parent, control_changes, track_index):
-        self.buttons = [ SliderElement(MIDI_CC_TYPE, 2, index) for index in control_changes ]
-        self.prev_values = [0] * len(control_changes)
+        Disconnectable.__init__(self)
+        self.resolution = len(control_changes)
+        self.sliderHue = [ SliderElement(MIDI_CC_TYPE, 0, index) for index in control_changes ]
+        self.sliderSatu = [ SliderElement(MIDI_CC_TYPE, 1, index) for index in control_changes ]
+        self.sliderLight = [ SliderElement(MIDI_CC_TYPE, 2, index) for index in control_changes ]
+        self.previousHue = [-1] * self.resolution
+        self.previousSatu = [-1] * self.resolution
+        self.previousLight = [-1] * self.resolution
         self.track_index = track_index
         self.parent = parent
+
 
     def update(self):
         if self.track_index >= len(LiveUtils.getTracks()):
             return
 
         track = LiveUtils.getTrack(self.track_index)
+        colorIndex = track.color_index
 
-        vall = round(track.output_meter_left, 3) if track.has_audio_output else 0
-        valr = round(track.output_meter_right, 3) if track.has_audio_output else 0
+        colorHue = ColorMap.hue[colorIndex]
+        colorSatu = ColorMap.saturation[colorIndex]
+        colorLight = ColorMap.light[colorIndex]
 
-        level = (vall + valr) / 2
+        valLeft = round(track.output_meter_left, 3) if track.has_audio_output else 0
+        valRight = round(track.output_meter_right, 3) if track.has_audio_output else 0
+
+        level = (valLeft + valRight) / 2
         if (level > CHANNEL_SCALE_MAX):
             level = CHANNEL_SCALE_MAX
         elif (level < CHANNEL_SCALE_MIN):
             level = CHANNEL_SCALE_MIN
         level = level - CHANNEL_SCALE_MIN
-        level = (level * len(self.buttons) * MIDI_MAX_VALUE - 1) / (CHANNEL_SCALE_MAX - CHANNEL_SCALE_MIN)
+        level = (level / (CHANNEL_SCALE_MAX - CHANNEL_SCALE_MIN)) * self.resolution
 
-        for slider_index in range(len(self.buttons)):
-            slider_value = 0
-            max_value = (slider_index + 1) * MIDI_MAX_VALUE - 1
-            min_value = slider_index * MIDI_MAX_VALUE
-            if (level >= max_value):
-                slider_value = MIDI_MAX_VALUE - 1
-            elif (level <= min_value):
-                slider_value = 0
-            else:
-                slider_value = level - min_value
-            if slider_value != self.prev_values[slider_index]:
-                self.buttons[slider_index].send_value(slider_value, True)
-                self.prev_values[slider_index] = slider_value
+        for index in range(self.resolution):
+            max_value = index + 1
+            min_value = index
+            if (level <= min_value):
+                colorLight = 0
+            elif (level < max_value):
+                colorLight = (level - min_value) * colorLight
+
+            if colorHue != self.previousHue[index]:
+                self.sliderHue[index].send_value(colorHue, True)
+                self.previousHue[index] = colorHue
+            if colorSatu != self.previousSatu[index]:
+                self.sliderSatu[index].send_value(colorSatu, True)
+                self.previousSatu[index] = colorSatu
+            if colorLight != self.previousLight[index]:
+                self.sliderLight[index].send_value(colorLight, True)
+                self.previousLight[index] = colorLight
